@@ -85,7 +85,7 @@ jobs:
       
       - name: Terraform Plan Status
         if: github.event_name == "pull_request"
-        run: exit ${{ steps.plan.outcome == 'success' ? 0 : 1 }}
+        run: exit ${{ steps.plan.outcome == "success" && 0 || 1 }}
 
       - name: Terraform Apply
         if: github.ref == "refs/heads/main" && github.event_name == "push"
