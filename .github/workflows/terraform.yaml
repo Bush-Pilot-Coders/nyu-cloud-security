@@ -59,7 +59,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: terraform plan -no-color -input=false
         continue-on-error: true
-      
+
       - uses: actions/github-script@v8
         if: github.event_name == 'pull_request'
         env:
@@ -72,15 +72,16 @@ jobs:
             | Terraform Initialization   | \`${{ steps.init.outcome }}\`     |
             | Terraform Validation       | \`${{ steps.validate.outcome }}\` |
             | Terraform Plan             | \`${{ steps.plan.outcome }}\`     |
-  
+
             <details><summary>Show Plan</summary>
-  
+
             \`\`\`\n
             ${process.env.PLAN_OUTPUT}
             \`\`\`
-  
+
             </details>
-            **Pushed by: @${{ github.actor }}**`;
+
+            **Pushed by:** @${{ github.actor }}`;
   
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -88,7 +89,7 @@ jobs:
               repo: context.repo.repo,
               body: output
             })
-      
+
       # Fail the workflow if the plan step failed
       - name: Terraform Plan Status
         if: github.event_name == 'pull_request'
