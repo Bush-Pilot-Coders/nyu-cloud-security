@@ -66,7 +66,8 @@ jobs:
           PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
         with:
           script: |
-            const output = `
+            const marker = '<!-- terraform-plan-comment -->';
+            const output = `${marker}
             | Terraform Format and Style | \`${{ steps.fmt.outcome }}\`      |
             | -------------------------- | --------------------------------- |
             | Terraform Initialization   | \`${{ steps.init.outcome }}\`     |
@@ -82,13 +83,29 @@ jobs:
             </details>
 
             **Pushed by:** @${{ github.actor }}`;
-  
-            github.rest.issues.createComment({
+
+            const { data: comments } = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output
-            })
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output,
+              });
+            }
 
       # Fail the workflow if the plan step failed
       - name: Terraform Plan Status
