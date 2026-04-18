@@ -109,7 +109,7 @@ resource "aws_cloudwatch_metric_alarm" "root_login" {
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "RootLoginCount"
-  namespace           = "TDR/CloudTrailMetrics"
+  namespace           = "NYU_TDR/CloudTrailMetrics"
   period              = 60
   statistic           = "Sum"
   threshold           = 0                               # Raise root login alarm immediately as this shoudl never happen

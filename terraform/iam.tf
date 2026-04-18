@@ -11,7 +11,7 @@ resource "aws_iam_role" "cloudtrail_cloudwatch" {
   })
 }
 
-resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
+resource "aws_iam_role_policy" "cloudtrail_cloudwatch_policy" {
   name = "tdr-cloudtrail-cloudwatch-policy"
   role = aws_iam_role.cloudtrail_cloudwatch.id
 
