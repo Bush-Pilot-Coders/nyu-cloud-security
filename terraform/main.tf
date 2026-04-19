@@ -95,10 +95,45 @@ resource "aws_sns_topic" "alerts" {
 }
 
 # Placeholder for Lambda (to be implemented)
+data "aws_iam_policy_document" "responder_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "responder" {
+  name               = "nyu-cloudsec-responder-role"
+  assume_role_policy = data.aws_iam_policy_document.responder_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "responder_basic_logs" {
+  role       = aws_iam_role.responder.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+data "archive_file" "responder_stub" {
+  type        = "zip"
+  output_path = "${path.module}/.build/responder_stub.zip"
+
+  source {
+    filename = "lambda_function.py"
+    content  = <<-EOT
+      def lambda_handler(event, context):
+          return {"statusCode": 200, "body": "stub"}
+    EOT
+  }
+}
+
 resource "aws_lambda_function" "responder" {
-  # This is a placeholder - actual implementation needed
-  function_name = "nyu-cloudsec-responder"
-  runtime       = "python3.13"
-  handler       = "lambda_function.lambda_handler"
-  # Other configurations...
+  function_name    = "nyu-cloudsec-responder"
+  role             = aws_iam_role.responder.arn
+  runtime          = "python3.13"
+  handler          = "lambda_function.lambda_handler"
+  filename         = data.archive_file.responder_stub.output_path
+  source_code_hash = data.archive_file.responder_stub.output_base64sha256
 }
