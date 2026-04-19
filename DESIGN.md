@@ -12,7 +12,7 @@ Developer commits AWS keys to GitHub → attacker scans & finds them → runs CL
 
 ```
                  ┌──────────────┐
- AWS API calls → │  CloudTrail  │
+ AWS API calls > │  CloudTrail  │
                  └──────┬───────┘
                         │ (events)
           ┌─────────────┴─────────────┐
