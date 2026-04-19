@@ -34,6 +34,9 @@ resource "aws_cloudtrail" "main" {
   is_multi_region_trail         = true
   enable_log_file_validation    = true
 
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.nyu-tdr-cloudwatch-log-group.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch.arn
+
   event_selector {
     read_write_type           = "All"
     include_management_events = true
