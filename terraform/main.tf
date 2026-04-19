@@ -46,7 +46,7 @@ resource "aws_cloudwatch_event_rule" "high_risk_api_calls" {
   description = "Detect high-risk IAM API calls"
 
   event_pattern = jsonencode({
-    source = ["aws.iam"]
+    source      = ["aws.iam"]
     detail-type = ["AWS API Call via CloudTrail"]
     detail = {
       eventSource = ["iam.amazonaws.com"]
@@ -65,7 +65,7 @@ resource "aws_cloudwatch_event_rule" "root_console_login" {
   description = "Detect any root console login"
 
   event_pattern = jsonencode({
-    source = ["aws.signin"]
+    source      = ["aws.signin"]
     detail-type = ["AWS Console Sign In via CloudTrail"]
     detail = {
       userIdentity = {
@@ -79,13 +79,13 @@ resource "aws_cloudwatch_event_rule" "root_console_login" {
 # EventBridge Targets (placeholders for now - will connect to Lambda later)
 resource "aws_cloudwatch_event_target" "high_risk_api_target" {
   rule      = aws_cloudwatch_event_rule.high_risk_api_calls.name
-  arn       = aws_lambda_function.responder.arn  # Placeholder - Lambda not defined yet
+  arn       = aws_lambda_function.responder.arn # Placeholder - Lambda not defined yet
   target_id = "HighRiskAPITarget"
 }
 
 resource "aws_cloudwatch_event_target" "root_login_target" {
   rule      = aws_cloudwatch_event_rule.root_console_login.name
-  arn       = aws_sns_topic.alerts.arn  # Direct to SNS for emergency
+  arn       = aws_sns_topic.alerts.arn # Direct to SNS for emergency
   target_id = "RootLoginTarget"
 }
 
