@@ -3,12 +3,21 @@ from datetime import datetime
 import urllib.request
 import time
 import boto3
+import traceback
 
 dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table("IAMActivityTable")
+iam_activity_table = dynamodb.Table("IAMActivityTable")
 sns = boto3.client("sns")
 SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:367878387488:IAMRootConsoleLoginAlert"
+baseline_table = dynamodb.Table("IAMIPBaselineTable")
 
+SENSITIVE_ACTIONS = {
+    "CreateAccessKey",
+    "DeleteAccessKey",
+    "AttachUserPolicy",
+    "PutUserPolicy",
+    "CreateLoginProfile"
+}
 
 def lambda_handler(event, context):
     for record in event["Records"]:
@@ -20,6 +29,9 @@ def lambda_handler(event, context):
             #Extract CloudTrail detail
             detail = body.get("detail", {})
             
+            # Step 3: Only process ConsoleLogin
+            # if detail.get("eventName") != "ConsoleLogin":
+            #     continue
             
             # Extract core fields
             parsed_event = parse_console_login(detail)
@@ -28,24 +40,179 @@ def lambda_handler(event, context):
             if parsed_event['ip_address'] is not None:
                 geo = get_geo(parsed_event['ip_address'])
                 parsed_event.update(geo)
+                
+                #record event
+                iam_activity_table.put_item(Item = parsed_event)
+                
+                handle_ip_evnet(parsed_event)
             else:
                 parsed_event.update({
                     "country": "UNKNOWN",
                     "region": "UNKNOWN",
                     "city": "UNKNOWN"
                 })
-
-            table.put_item(Item = parsed_event)
+                
+                #record event
+                iam_activity_table.put_item(Item = parsed_event)
+                
+                
+            
+            
             
             #Root Login Detection
             if parsed_event['user_id'] == "ROOT" and parsed_event['event_name'] == "ConsoleLogin":
                 handle_root_login(parsed_event)
                 
-            
-
+             
+            # 👉 Next layer:
+            # - Geo-IP lookup
+            # - DynamoDB write
+            # - anomaly detection
             
         except Exception as e:
-            print("Error processing record:", str(e))
+            print("ERROR:", str(e))
+            print(traceback.format_exc())   
+            raise
+            
+def handle_ip_evnet(event):
+    user_id, ip, time = event["user_id"], event["ip_address"], event["timestamp"]
+    action = event['event_name']
+    #get base line
+    baseline = get_baseline(user_id)
+    
+    # create base line if not exist
+    if not baseline:
+        create_baseline(user_id, ip, time)
+        return
+    
+    newbaseline = update_baseline(user_id, ip, time, baseline)
+    
+    trusted_ips = newbaseline['trusted_ips']
+
+    is_untrusted_ip = ip not in trusted_ips
+    
+    if is_untrusted_ip:
+        if action in SENSITIVE_ACTIONS:
+            # revoke_user_key()
+            send_alert(action, event)
+    else:
+        update_baseline(user_id, ip, "UNKNOWN")
+
+def send_alert(action, event):
+    message = f"""
+        🚨 UNAUTHORIZED ACTION DETECTED 🚨
+
+        Action: {action}
+        User ID: {event["user_id"]}
+        Time: {event["timestamp"]}
+        IP: {event["ip_address"]}
+        Country: {event["country"]}
+        Region: {event['region']}
+        City: {event['city']}
+
+    """
+    
+    sns.publish(
+        TopicArn=SNS_TOPIC_ARN,
+        Subject="🚨 Unauthorized action Alert",
+        Message=message
+    )
+
+    print("alert sent")
+    
+            
+def get_baseline(user_id):
+    resp = baseline_table.get_item(Key={"user_id": user_id})
+    return resp.get("Item")
+
+def create_baseline(user_id, ip, time):
+    baseline_table.put_item(
+        Item={
+            "user_id": user_id,
+            "trusted_ips": [ip],
+            "known_ips": [
+                {"ip": ip, "timestamps": [time]}
+            ],
+            "last_seen": time
+        }
+    )
+    return
+
+def update_baseline(user_id, ip, timestamp, baseline):
+
+    trusted = baseline.get("trusted_ips", [])
+    known = baseline.get("known_ips", [])
+
+    # ------------------------
+    # 1. UPDATE KNOWN IPS
+    # ------------------------
+    found = False
+
+    for entry in known:
+        if entry["ip"] == ip:
+            entry["timestamps"].append(timestamp)
+            found = True
+            break
+
+    if not found:
+        known.append({
+            "ip": ip,
+            "timestamps": [timestamp]
+        })
+
+    # ------------------------
+    # 2. LIMIT KNOWN IPS
+    # ------------------------
+    # 5 known ip max, remove the oldest ip
+    if len(known) > 5:
+        # remove IP with oldest timestamp
+        known.sort(key=lambda x: max(x["timestamps"]))
+        known.pop(0)
+
+    # ------------------------
+    # 3. PROMOTION CHECK
+    # ------------------------
+    # if ip appear 3 times or more in known with each appearence in a different day, promote to trusted
+    for entry in known:
+        timestamps = entry["timestamps"]
+
+        days = set(t // 86400 for t in timestamps)
+
+        if len(days) >= 3:
+            ip_candidate = entry["ip"]
+
+            if ip_candidate not in trusted:
+                trusted.append(ip_candidate)
+
+    # ------------------------
+    # 4. CLEANUP TRUSTED IPS
+    # ------------------------
+    # remove trusted ip that are not in known ip
+    known_ip_set = {entry["ip"] for entry in known}
+
+    trusted = [ip for ip in trusted if ip in known_ip_set]
+    
+    # ------------------------
+    # 5. LIMIT TRUSTED IPS
+    # ------------------------
+    # 3 trusted ip max
+    if len(trusted) > 3:
+        trusted = trusted[-3:]  # keep newest
+
+    ret =  {
+        "user_id": user_id,
+        "trusted_ips": trusted,
+        "known_ips": known,
+        "last_seen": timestamp
+    }
+    
+    
+    baseline_table.put_item(
+    Item=ret,
+    ConditionExpression="attribute_exists(user_id)"
+    )
+    
+    return ret
 
 def handle_root_login(detail):
  
@@ -123,6 +290,7 @@ def parse_console_login(detail):
     except Exception as e:
         print("Failed to parse ConsoleLogin event:", str(e))
         return None
+    
 
 
 def extract_user(user_identity):
