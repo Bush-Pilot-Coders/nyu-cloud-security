@@ -5,6 +5,7 @@ import time
 import boto3
 import traceback
 
+iam = boto3.client("iam")
 dynamodb = boto3.resource("dynamodb")
 iam_activity_table = dynamodb.Table("IAMActivityTable")
 sns = boto3.client("sns")
@@ -93,7 +94,7 @@ def handle_ip_evnet(event):
     
     if is_untrusted_ip:
         if action in SENSITIVE_ACTIONS:
-            # revoke_user_key()
+            revoke_user_keys(user_id)
             send_alert(action, event)
     else:
         update_baseline(user_id, ip, "UNKNOWN")
@@ -119,6 +120,37 @@ def send_alert(action, event):
     )
 
     print("alert sent")
+    
+def revoke_user_keys(user_name):
+    try:
+        if user_name == "ROOT":
+            print("Root user detected — cannot revoke via IAM API")
+            return
+        response = iam.list_access_keys(UserName=user_name)
+
+        keys = response.get("AccessKeyMetadata", [])
+
+        if not keys:
+            print(f"No access keys found for user {user_name}")
+            return
+
+        for key in keys:
+            access_key_id = key["AccessKeyId"]
+            status = key["Status"]
+
+            if status == "Active":
+                iam.update_access_key(
+                    UserName=user_name,
+                    AccessKeyId=access_key_id,
+                    Status="Inactive"
+                )
+                print(f"Revoked key: {access_key_id}")
+            else:
+                print(f"Key already inactive: {access_key_id}")
+
+    except Exception as e:
+        print(f"Error revoking keys for {user_name}: {str(e)}")
+        raise
     
             
 def get_baseline(user_id):
