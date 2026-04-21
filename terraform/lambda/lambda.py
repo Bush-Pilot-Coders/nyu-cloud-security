@@ -97,8 +97,6 @@ def handle_ip_evnet(event):
         if action in SENSITIVE_ACTIONS:
             revoke_user_keys(user_id)
             send_alert(action, event)
-    else:
-        update_baseline(user_id, ip, "UNKNOWN")
 
 def send_alert(action, event):
     message = f"""
