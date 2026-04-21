@@ -3,7 +3,10 @@
 # --------------------------------------------------------
 
 resource "aws_iam_role" "cloudtrail_cloudwatch" {
-  name = "tdr-cloudtrail-cloudwatch-role"
+  name                  = "tdr-cloudtrail-cloudwatch-role"
+  path                  = "/"
+  force_detach_policies = false
+  max_session_duration  = 3600
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

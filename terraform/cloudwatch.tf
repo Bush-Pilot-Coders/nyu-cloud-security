@@ -5,6 +5,7 @@
 resource "aws_cloudwatch_log_group" "nyu-cloudwatch-log-group" {
   name              = "/aws/cloudtrail/nyu-log-group"
   retention_in_days = 90
+  skip_destroy      = false
 }
 
 
@@ -19,6 +20,7 @@ resource "aws_cloudwatch_log_metric_filter" "api_call_volume" {
     name      = "APICallCount"
     namespace = "NYU/CloudTrailMetrics"
     value     = "1"
+    unit      = "None"
   }
 }
 
@@ -32,6 +34,7 @@ resource "aws_cloudwatch_log_metric_filter" "privilege_escalation" {
     name      = "PrivilegeEscalationEventCount"
     namespace = "NYU/CloudTrailMetrics"
     value     = "1"
+    unit      = "None"
   }
 }
 
@@ -45,6 +48,7 @@ resource "aws_cloudwatch_log_metric_filter" "root_login" {
     name      = "RootLoginCount"
     namespace = "NYU/CloudTrailMetrics"
     value     = "1"
+    unit      = "None"
   }
 }
 
@@ -59,6 +63,7 @@ resource "aws_cloudwatch_metric_alarm" "high_api_volume" {
   statistic           = "Sum" # Sum needed since we are counting events
   threshold           = 100   # Tuned against baselines
   alarm_description   = "Triggered when API call volume exceeds threshold in a 5-minute window"
+  actions_enabled     = true
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching" # Don't raise alerts if no data points come in
 }
@@ -74,6 +79,7 @@ resource "aws_cloudwatch_metric_alarm" "privilege_escalation" {
   statistic           = "Sum"
   threshold           = 0 # Raise privelege escalation immediately. Even if legitimate it should be verified
   alarm_description   = "Triggered on any privilege escalation API call"
+  actions_enabled     = true
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 }
@@ -89,6 +95,7 @@ resource "aws_cloudwatch_metric_alarm" "root_login" {
   statistic           = "Sum"
   threshold           = 0 # Raise root login alarm immediately as this shoudl never happen
   alarm_description   = "Emergency: root account console login detected"
+  actions_enabled     = true
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
 }
