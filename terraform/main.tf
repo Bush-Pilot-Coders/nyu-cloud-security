@@ -142,11 +142,27 @@ resource "aws_sqs_queue_policy" "iam_activity" {
   })
 }
 
+locals {
+  alert_emails = [
+    "kat9331@nyu.edu",
+    "dm6256@nyu.edu",
+    "kt1661@nyu.edu",
+    "jf4440@nyu.edu",
+  ]
+}
+
 # SNS Topic for Alerts
 resource "aws_sns_topic" "alerts" {
   name                        = "nyu-cloudsec-alerts"
   fifo_topic                  = false
   content_based_deduplication = false
+}
+
+resource "aws_sns_topic_subscription" "alerts_email" {
+  for_each  = toset(local.alert_emails)
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = each.value
 }
 
 resource "aws_sns_topic_policy" "alerts" {
@@ -220,11 +236,12 @@ resource "aws_iam_role_policy" "responder_inline" {
         Resource = aws_sns_topic.alerts.arn
       },
       {
-        Sid    = "IAMKeyRevocation"
+        Sid    = "IAMKeyRevocationAndQuarantine"
         Effect = "Allow"
         Action = [
           "iam:ListAccessKeys",
-          "iam:UpdateAccessKey"
+          "iam:UpdateAccessKey",
+          "iam:AttachUserPolicy"
         ]
         Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/*"
       }
@@ -257,6 +274,7 @@ resource "aws_lambda_function" "responder" {
       SNS_TOPIC_ARN         = aws_sns_topic.alerts.arn
       IAM_ACTIVITY_TABLE    = aws_dynamodb_table.iam_activity.name
       IAM_IP_BASELINE_TABLE = aws_dynamodb_table.iam_ip_baseline.name
+      QUARANTINE_POLICY_ARN = "arn:aws:iam::aws:policy/AWSCompromisedKeyQuarantineV3"
     }
   }
 }
