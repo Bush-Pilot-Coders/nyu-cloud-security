@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 import urllib.request
 import time
@@ -7,10 +8,10 @@ import traceback
 
 iam = boto3.client("iam")
 dynamodb = boto3.resource("dynamodb")
-iam_activity_table = dynamodb.Table("IAMActivityTable")
+iam_activity_table = dynamodb.Table(os.environ.get("IAM_ACTIVITY_TABLE", "IAMActivityTable"))
 sns = boto3.client("sns")
-SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:367878387488:IAMRootConsoleLoginAlert"
-baseline_table = dynamodb.Table("IAMIPBaselineTable")
+SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN", "arn:aws:sns:us-east-1:367878387488:IAMRootConsoleLoginAlert")
+baseline_table = dynamodb.Table(os.environ.get("IAM_IP_BASELINE_TABLE", "IAMIPBaselineTable"))
 
 SENSITIVE_ACTIONS = {
     "CreateAccessKey",
