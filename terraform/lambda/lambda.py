@@ -12,6 +12,7 @@ iam_activity_table = dynamodb.Table(os.environ.get("IAM_ACTIVITY_TABLE", "IAMAct
 sns = boto3.client("sns")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN", "arn:aws:sns:us-east-1:367878387488:IAMRootConsoleLoginAlert")
 baseline_table = dynamodb.Table(os.environ.get("IAM_IP_BASELINE_TABLE", "IAMIPBaselineTable"))
+QUARANTINE_POLICY_ARN = os.environ.get("QUARANTINE_POLICY_ARN")
 
 SENSITIVE_ACTIONS = {
     "CreateAccessKey",
@@ -96,6 +97,7 @@ def handle_ip_evnet(event):
     if is_untrusted_ip:
         if action in SENSITIVE_ACTIONS:
             revoke_user_keys(user_id)
+            attach_quarantine_policy(user_id)
             send_alert(action, event)
 
 def send_alert(action, event):
@@ -150,8 +152,25 @@ def revoke_user_keys(user_name):
     except Exception as e:
         print(f"Error revoking keys for {user_name}: {str(e)}")
         raise
-    
-            
+
+def attach_quarantine_policy(user_name):
+    if user_name == "ROOT":
+        print("Root user detected — cannot attach quarantine policy via IAM API")
+        return
+    if not QUARANTINE_POLICY_ARN:
+        print("QUARANTINE_POLICY_ARN not set; skipping quarantine")
+        return
+    try:
+        iam.attach_user_policy(
+            UserName=user_name,
+            PolicyArn=QUARANTINE_POLICY_ARN
+        )
+        print(f"Attached quarantine policy to {user_name}")
+    except Exception as e:
+        print(f"Error attaching quarantine policy to {user_name}: {str(e)}")
+        raise
+
+
 def get_baseline(user_id):
     resp = baseline_table.get_item(Key={"user_id": user_id})
     return resp.get("Item")
